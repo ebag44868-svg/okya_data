@@ -1,0 +1,39 @@
+name: 급식·학사일정 자동 갱신
+
+# 매일 자정(KST) + 수동 실행 가능
+on:
+  schedule:
+    - cron: "0 15 * * *"   # 15:00 UTC = 00:00 KST (매일 밤 12시)
+  workflow_dispatch: {}
+
+permissions:
+  contents: write           # meal.json 커밋용
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 저장소 체크아웃
+        uses: actions/checkout@v4
+
+      - name: 파이썬 설정
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: NEIS에서 급식·학사일정 수집
+        env:
+          NEIS_KEY: ${{ secrets.NEIS_KEY }}   # 없어도 동작(있으면 조회 제한 해제)
+        run: python scripts/fetch_neis.py
+
+      - name: 변경분 커밋 & 푸시
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add meal.json schedule.json
+          if git diff --staged --quiet; then
+            echo "변경 없음 — 커밋 생략"
+          else
+            git commit -m "chore: 급식·학사일정 갱신 ($(date -u +%Y-%m-%d))"
+            git push
+          fi
